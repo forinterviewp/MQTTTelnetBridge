@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.1)
 
 set(TARGET "server")
-add_executable(server server.cpp)
+add_executable(server server.cpp mqtt_client.cpp)
 
 target_include_directories(${TARGET} PUBLIC "${PROJECT_SOURCE_DIR}/server.cpp")
 

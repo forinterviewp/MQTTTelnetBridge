@@ -9,6 +9,8 @@
 #include <cstdint>
 #include <string>
 
+#include "mqtt_client.hpp"
+
 constexpr std::size_t EPOLL_SIZE = 1000;
 constexpr std::size_t MAX_BUF = 512;
 
@@ -21,11 +23,11 @@ struct scope_guard {
 };
 
 
-void process_connection(int fd) {
+std::string get_request_from_connection(int fd) {
   std::string result;
+  char buf[MAX_BUF];
 
   while (true) {
-    char buf[MAX_BUF];
     ssize_t readed = read(fd, buf, MAX_BUF - 1);
     if (readed == 0)
       break; // connection closed
@@ -35,15 +37,19 @@ void process_connection(int fd) {
         break; // I/O buffer emptied
 
       perror("read()");
-      return;
+      break;
     }
 
     buf[readed] = '\0';
     result += buf;
   }
 
-  // * send response
-  auto response = result;
+  return result;
+}
+
+
+void write_response(int fd, const std::string& result) {
+  auto response = "Echo: " + result;
   ssize_t writed = send(fd, response.c_str(), response.size(), 0);
   if (writed == -1) {
     perror("send()");
@@ -51,6 +57,24 @@ void process_connection(int fd) {
 
   if (static_cast<std::size_t>(writed) != response.size())
     std::cout << "Incomplete write" << std::endl;
+}
+
+
+enum class Command { DoNothing, CloseConnection, AddSubscription, StartListen };
+
+
+Command process_request(const std::string& request) {
+  if (request[0] == '\r' && request[1] == '\n')
+    return Command::CloseConnection;
+
+  // todo: subscribe
+  if (request == "add\r\n")
+    return Command::AddSubscription;
+
+  if (request == "poll\r\n")
+    return Command::StartListen;
+
+  return Command::DoNothing;
 }
 
 
@@ -71,7 +95,7 @@ void finish_connection(int epfd, epoll_event& ev) {
 }
 
 
-void setnonblocking(int socket) {
+inline void setnonblocking(int socket) {
   int flags = fcntl(socket, F_GETFL);
   if (flags == -1) {
     perror("fcntl() get flags");
@@ -84,7 +108,6 @@ void setnonblocking(int socket) {
 }
 
 
-// TODO: always inline
 inline sockaddr_in create_sockaddr(std::uint16_t port) {
   sockaddr_in serv_addr;
   memset(&serv_addr, 0, sizeof serv_addr);
@@ -199,6 +222,7 @@ int main(int argc, char** argv) {
 
   std::cout << "Server starts to listen on port: " << port << std::endl;
 
+  MQTTClient mqtt_client;
   epoll_event evlist[EPOLL_SIZE];
   while(true) {
     int num_of_fds = epoll_wait(epfd, evlist, EPOLL_SIZE, -1);
@@ -213,8 +237,18 @@ int main(int argc, char** argv) {
         accept_client_socket(epfd, listen_socket);
       }
       else {
-        process_connection(evlist[n].data.fd);
-        finish_connection(epfd, evlist[n]);
+        // Process client request
+        std::string request = get_request_from_connection(evlist[n].data.fd);
+        Command command = process_request(request);
+        if (command == Command::CloseConnection) {
+          mqtt_client.CloseSession(evlist[n].data.fd);
+          finish_connection(epfd, evlist[n]);
+        } else if (command == Command::AddSubscription) {
+          mqtt_client.AddSubscription(evlist[n].data.fd, request);
+        } else if (command == Command::StartListen) {
+          mqtt_client.StartListen(evlist[n].data.fd);
+
+        }
       }
     }
   }
