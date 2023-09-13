@@ -1,0 +1,18 @@
+version: '3.4'
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2.0.17
+    ports:
+    - 1883:1883
+    - 9001:9001
+    volumes:
+    - ${PWD}/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+  mqttbridge:
+    image: my/mqttbridge:0.0.1
+    build: ./server
+    depends_on:
+    - mosquitto
+    ports:
+    - 1234:1234
+

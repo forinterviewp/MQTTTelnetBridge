@@ -11,6 +11,7 @@
 
 #include "mqtt_client.hpp"
 
+
 constexpr std::size_t EPOLL_SIZE = 1000;
 constexpr std::size_t MAX_BUF = 512;
 
@@ -48,18 +49,6 @@ std::string get_request_from_connection(int fd) {
 }
 
 
-void write_response(int fd, const std::string& result) {
-  auto response = "Echo: " + result;
-  ssize_t writed = send(fd, response.c_str(), response.size(), 0);
-  if (writed == -1) {
-    perror("send()");
-  }
-
-  if (static_cast<std::size_t>(writed) != response.size())
-    std::cout << "Incomplete write" << std::endl;
-}
-
-
 enum class Command { DoNothing, CloseConnection, AddSubscription, StartListen };
 
 
@@ -67,14 +56,29 @@ Command process_request(const std::string& request) {
   if (request[0] == '\r' && request[1] == '\n')
     return Command::CloseConnection;
 
-  // todo: subscribe
-  if (request == "add\r\n")
+  // todo: sorry for that :'(
+  // TODO: omg wanna c++20 with starts_with...
+  if (request[0] == 's'
+      && request[1] == 'u'
+      && request[2] == 'b'
+      && request[3] == 's'
+      && request[4] == 'c'
+      && request[5] == 'r'
+      && request[6] == 'i'
+      && request[7] == 'b'
+      && request[8] == 'e') {
     return Command::AddSubscription;
+  }
 
   if (request == "poll\r\n")
     return Command::StartListen;
 
   return Command::DoNothing;
+}
+
+
+std::string extract_topic(const std::string& request, std::size_t pos_of_topic=10) {
+  return request.substr(pos_of_topic, request.size() - pos_of_topic - 2);  // -2: '\r', '\n'
 }
 
 
@@ -241,13 +245,12 @@ int main(int argc, char** argv) {
         std::string request = get_request_from_connection(evlist[n].data.fd);
         Command command = process_request(request);
         if (command == Command::CloseConnection) {
-          mqtt_client.CloseSession(evlist[n].data.fd);
           finish_connection(epfd, evlist[n]);
+          mqtt_client.CloseSession(evlist[n].data.fd);
         } else if (command == Command::AddSubscription) {
-          mqtt_client.AddSubscription(evlist[n].data.fd, request);
+          mqtt_client.AddSubscription(evlist[n].data.fd, extract_topic(request));
         } else if (command == Command::StartListen) {
           mqtt_client.StartListen(evlist[n].data.fd);
-
         }
       }
     }

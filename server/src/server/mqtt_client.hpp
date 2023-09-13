@@ -7,6 +7,9 @@
 
 
 struct Session {
+  // Epoll fd for write and identification.
+  int fd;
+
   std::vector<std::string> subscriptions;
 };
 

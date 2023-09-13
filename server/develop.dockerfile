@@ -1,6 +1,6 @@
 FROM ubuntu:22.04
 
-RUN apt update && apt install -y git llvm clang cmake google-mock libgtest-dev
+RUN apt update && apt install -y llvm clang cmake google-mock libgtest-dev
 
 # Compile gmock
 WORKDIR /usr/src/gmock
@@ -10,8 +10,10 @@ RUN cmake CMakeLists.txt && make
 WORKDIR /usr/src/gtest
 RUN cmake CMakeLists.txt && make
 
+# TODO move git:
 # Building the Paho C library
 WORKDIR /usr/src/pahomqtt
+RUN apt install -y git
 RUN git clone https://github.com/eclipse/paho.mqtt.c.git && \
     cd paho.mqtt.c && \
     git checkout v1.3.8 && \
@@ -19,6 +21,7 @@ RUN git clone https://github.com/eclipse/paho.mqtt.c.git && \
     cmake --build build/ --target install
 
 # Building the Paho C++ library after
+WORKDIR /usr/src/pahomqtt
 RUN git clone https://github.com/eclipse/paho.mqtt.cpp && \
     cd paho.mqtt.cpp && \
     cmake -Bbuild -H. -DPAHO_BUILD_STATIC=ON -DPAHO_BUILD_DOCUMENTATION=FALSE -DPAHO_BUILD_SAMPLES=TRUE -DPAHO_ENABLE_TESTING=OFF -DPAHO_WITH_SSL=OFF -DPAHO_HIGH_PERFORMANCE=ON && \
@@ -26,13 +29,8 @@ RUN git clone https://github.com/eclipse/paho.mqtt.cpp && \
 
 RUN ldconfig
 
-ADD ./src /mqtt_bridge_src
-WORKDIR /mqtt_bridge_src
+WORKDIR /src
 
-RUN mkdir ./build && \
-    cd ./build && \
-    cmake .. && make && \
-    cp ./server/server /usr/local/bin/mqtt_bridge_server
-
-ENTRYPOINT [ "mqtt_bridge_server", "1234" ]
+# docker build -t mqttbridge_dev -f ./develop.dockerfile .
+# docker run -it --rm -v $(pwd -P)/src:/src:ro --name mqttbridge_dev mqttbridge_dev
 
