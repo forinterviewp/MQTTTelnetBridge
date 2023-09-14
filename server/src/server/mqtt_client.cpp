@@ -28,6 +28,12 @@ void MQTTClient::CloseSession(int fd) {
 }
 
 
+// TODO: random
+std::string generate_client_id(const Session& session) {
+  return CLIENT_ID + "_" + std::to_string(session.fd);
+}
+
+
 bool write_to_subscriber(int fd, const std::string& response) {
   bool fail_to_write = false;
 
@@ -47,7 +53,7 @@ bool write_to_subscriber(int fd, const std::string& response) {
 
 void MQTTSession(Session session) noexcept {
   try {
-    mqtt::client cli(SERVER_ADDRESS, CLIENT_ID);
+    mqtt::client cli(SERVER_ADDRESS, generate_client_id(session));
 
     auto connOpts = mqtt::connect_options_builder()
       .keep_alive_interval(std::chrono::seconds(30))
